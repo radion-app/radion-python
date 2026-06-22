@@ -1,0 +1,30 @@
+[project]
+name = "radion-ws"
+version = "0.1.0"
+description = "Async WebSocket SDK for the Radion realtime API"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["radion", "websocket", "sdk", "realtime", "async"]
+dependencies = ["websockets>=13.0"]
+
+[project.optional-dependencies]
+dev = ["ruff>=0.8.0", "ty>=0.0.1a1"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/radion_ws"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "SIM", "RUF"]
+
+[tool.ty.environment]
+root = ["./src"]
