@@ -183,6 +183,59 @@ class RealtimeClient:
     ]: ...
     @overload
     def on_channel(
+        self, channel: Literal["mempool.trades", "mempool.large_trades"]
+    ) -> Callable[
+        [ChannelHandlerFor[TradesPayload]], ChannelHandlerFor[TradesPayload]
+    ]: ...
+    @overload
+    def on_channel(
+        self, channel: Literal["mempool.oracle"]
+    ) -> Callable[
+        [ChannelHandlerFor[OraclePayload]], ChannelHandlerFor[OraclePayload]
+    ]: ...
+    @overload
+    def on_channel(
+        self, channel: Literal["mempool.lifecycle"]
+    ) -> Callable[
+        [ChannelHandlerFor[LifecyclePayload]], ChannelHandlerFor[LifecyclePayload]
+    ]: ...
+    @overload
+    def on_channel(
+        self, channel: Literal["mempool.activity"]
+    ) -> Callable[
+        [ChannelHandlerFor[ActivityPayload]], ChannelHandlerFor[ActivityPayload]
+    ]: ...
+    @overload
+    def on_channel(
+        self, channel: Literal["mempool.collateral"]
+    ) -> Callable[
+        [ChannelHandlerFor[CollateralPayload]],
+        ChannelHandlerFor[CollateralPayload],
+    ]: ...
+    @overload
+    def on_channel(
+        self, channel: Literal["mempool.combos"]
+    ) -> Callable[
+        [ChannelHandlerFor[CombosPayload]], ChannelHandlerFor[CombosPayload]
+    ]: ...
+    @overload
+    def on_channel(
+        self, channel: Literal["mempool.prices"]
+    ) -> Callable[
+        [ChannelHandlerFor[PricesPayload]], ChannelHandlerFor[PricesPayload]
+    ]: ...
+    @overload
+    def on_channel(
+        self,
+        channel: Literal[
+            "mempool.global", "mempool.wallets", "mempool.markets"
+        ],
+    ) -> Callable[
+        [ChannelHandlerFor[AnyConfirmedPayload]],
+        ChannelHandlerFor[AnyConfirmedPayload],
+    ]: ...
+    @overload
+    def on_channel(
         self, channel: str
     ) -> Callable[[ChannelHandler], ChannelHandler]: ...
     def on_channel(
@@ -196,7 +249,8 @@ class RealtimeClient:
             async def handle(event): ...
 
         Handlers receive ``event.data`` narrowed to the channel's payload type.
-        Also accepts ``mempool.``-prefixed channels by name.
+        Each ``mempool.``-prefixed companion shares its confirmed channel's
+        payload type, so mempool handlers are narrowed the same way.
         """
 
         def register(handler: ChannelHandler) -> ChannelHandler:

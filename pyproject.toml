@@ -1,6 +1,6 @@
 [project]
 name = "radion-sdk"
-version = "0.2.1"
+version = "0.3.0"
 description = "Official async SDK for the Radion platform"
 readme = "README.md"
 requires-python = ">=3.10"
