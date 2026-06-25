@@ -34,9 +34,7 @@ class EventDispatcher:
     def on_channel(self, channel: str, handler: ChannelHandler) -> None:
         self._channel_handlers.setdefault(channel, []).append(handler)
 
-    def off_channel(
-        self, channel: str, handler: ChannelHandler | None = None
-    ) -> None:
+    def off_channel(self, channel: str, handler: ChannelHandler | None = None) -> None:
         if handler is None:
             self._channel_handlers.pop(channel, None)
             return

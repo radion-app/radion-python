@@ -1,12 +1,12 @@
 [project]
 name = "radion"
-version = "0.1.0"
+version = "0.2.0"
 description = "Official async SDK for the Radion platform"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 keywords = ["radion", "sdk", "realtime", "websocket", "async", "polymarket"]
-dependencies = ["websockets>=13.0"]
+dependencies = ["websockets>=13.0", "msgspec>=0.18.0"]
 
 [project.optional-dependencies]
 dev = ["ruff>=0.8.0", "ty>=0.0.1a1"]

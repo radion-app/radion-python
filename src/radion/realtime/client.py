@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, TypeVar, cast, overload
 
 import websockets
 from websockets.asyncio.client import ClientConnection
 
 from .._config import DEFAULT_WS_URL
-from ..errors import RadionConnectionError, RadionServerError
+from ..errors import RadionConnectionError, RadionError, RadionServerError
 from .dispatcher import (
     CLIENT_EVENTS,
     ChannelHandler,
@@ -19,17 +19,36 @@ from .dispatcher import (
 from .heartbeat import Heartbeat
 from .protocol import (
     ChannelEvent,
+    ErrorFrame,
+    EventFrame,
     Subscription,
     parse_inbound_frame,
     ping_frame,
     subscribe_frame,
     unsubscribe_frame,
+    validate_subscription_filters,
 )
 from .reconnect_manager import ReconnectManager
 from .subscription_manager import SubscriptionManager
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
+    from typing import Literal
+
+    from .payloads import (
+        ActivityPayload,
+        AnyConfirmedPayload,
+        CollateralPayload,
+        CombosPayload,
+        LifecyclePayload,
+        OraclePayload,
+        PricesPayload,
+        TradesPayload,
+    )
+
+    _P = TypeVar("_P")
+    #: A handler for events on a specific channel, typed to its payload.
+    ChannelHandlerFor = Callable[[ChannelEvent[_P]], "Awaitable[None] | None"]
 
 
 class RealtimeClient:
@@ -101,6 +120,9 @@ class RealtimeClient:
     async def subscribe(self, subscription: Subscription) -> None:
         """Subscribe to a channel. Replayed automatically after reconnect."""
         self._assert_usable()
+        filter_error = validate_subscription_filters(subscription)
+        if filter_error is not None:
+            raise RadionError(filter_error)
         if self._subscriptions.add(subscription) and self.connected:
             await self._send(subscribe_frame(subscription))
 
@@ -110,6 +132,60 @@ class RealtimeClient:
         if self._subscriptions.remove(subscription_id) and self.connected:
             await self._send(unsubscribe_frame(subscription_id))
 
+    @overload
+    def on(
+        self, event: Literal["trades", "large_trades"]
+    ) -> Callable[
+        [ChannelHandlerFor[TradesPayload]], ChannelHandlerFor[TradesPayload]
+    ]: ...
+    @overload
+    def on(
+        self, event: Literal["oracle"]
+    ) -> Callable[
+        [ChannelHandlerFor[OraclePayload]], ChannelHandlerFor[OraclePayload]
+    ]: ...
+    @overload
+    def on(
+        self, event: Literal["lifecycle"]
+    ) -> Callable[
+        [ChannelHandlerFor[LifecyclePayload]], ChannelHandlerFor[LifecyclePayload]
+    ]: ...
+    @overload
+    def on(
+        self, event: Literal["activity"]
+    ) -> Callable[
+        [ChannelHandlerFor[ActivityPayload]], ChannelHandlerFor[ActivityPayload]
+    ]: ...
+    @overload
+    def on(
+        self, event: Literal["collateral"]
+    ) -> Callable[
+        [ChannelHandlerFor[CollateralPayload]],
+        ChannelHandlerFor[CollateralPayload],
+    ]: ...
+    @overload
+    def on(
+        self, event: Literal["combos"]
+    ) -> Callable[
+        [ChannelHandlerFor[CombosPayload]], ChannelHandlerFor[CombosPayload]
+    ]: ...
+    @overload
+    def on(
+        self, event: Literal["prices"]
+    ) -> Callable[
+        [ChannelHandlerFor[PricesPayload]], ChannelHandlerFor[PricesPayload]
+    ]: ...
+    @overload
+    def on(
+        self, event: Literal["global", "wallets", "markets"]
+    ) -> Callable[
+        [ChannelHandlerFor[AnyConfirmedPayload]],
+        ChannelHandlerFor[AnyConfirmedPayload],
+    ]: ...
+    @overload
+    def on(
+        self, event: str
+    ) -> Callable[[ChannelHandler | ClientHandler], ChannelHandler | ClientHandler]: ...
     def on(
         self, event: str
     ) -> Callable[[ChannelHandler | ClientHandler], ChannelHandler | ClientHandler]:
@@ -122,6 +198,8 @@ class RealtimeClient:
 
         Use ``"event"`` to receive every channel event regardless of channel.
         Lifecycle events: ``open``, ``close``, ``reconnect``, ``error``.
+        Channel handlers receive ``event.data`` narrowed to the channel's
+        payload type.
         """
 
         def register(
@@ -204,23 +282,18 @@ class RealtimeClient:
         frame = parse_inbound_frame(raw)
         if frame is None:
             return
-        kind = frame["type"]
-        if kind == "event":
+        if isinstance(frame, EventFrame):
             await self._dispatcher.dispatch(
-                ChannelEvent(
-                    id=frame["id"],
-                    channel=frame["channel"],
-                    data=frame.get("data"),
-                )
+                ChannelEvent(id=frame.id, channel=frame.channel, data=frame.data)
             )
-        elif kind == "error":
+        elif isinstance(frame, ErrorFrame):
             await self._dispatcher.emit(
                 "error",
                 RadionServerError(
-                    frame.get("message", "server error"),
-                    code=frame.get("code"),
-                    channel=frame.get("channel"),
-                    id=frame.get("id"),
+                    frame.message,
+                    code=frame.code,
+                    channel=frame.channel,
+                    id=frame.id,
                 ),
             )
         # pong / subscribed / unsubscribed are acks; mark_alive already handled.
