@@ -13,7 +13,7 @@ radion = Radion(api_key=os.getenv("RADION_API_KEY"))
 await radion.realtime.connect()
 await radion.realtime.subscribe(Subscription(id="trades", channel="trades"))
 
-@radion.realtime.on("trades")
+@radion.realtime.on_channel("trades")
 async def handle_trade(event):
     print(event.id, event.data)
 ```
@@ -53,7 +53,7 @@ async def main() -> None:
     await radion.realtime.connect()
     await radion.realtime.subscribe(Subscription(id="trades", channel="trades"))
 
-    @radion.realtime.on("trades")
+    @radion.realtime.on_channel("trades")
     async def handle_trade(event):
         print(event.id, event.channel, event.data)
 
@@ -96,15 +96,19 @@ from radion import RealtimeClient
 client = RealtimeClient(api_key=os.getenv("RADION_API_KEY"))
 ```
 
-| Method                          | Description                                                  |
-| ------------------------------- | ------------------------------------------------------------ |
-| `await connect()`               | Open the connection. Resolves once established.             |
-| `await subscribe(subscription)` | Subscribe with `Subscription(id, channel, filters)`. Replayed on reconnect.|
-| `await unsubscribe(id)`         | Unsubscribe by subscription id.                             |
-| `on(event)`                     | Decorator for a channel, `"event"` (all), or lifecycle handler. |
-| `off(event, handler=None)`      | Remove a handler (or all for that event).                   |
-| `await close(code=1000, ...)`   | Graceful shutdown. Stops reconnect attempts.                |
-| `connected`                     | Property — whether the socket is currently open.            |
+| Method                              | Description                                                  |
+| ----------------------------------- | ------------------------------------------------------------ |
+| `await connect()`                   | Open the connection. Resolves once established.             |
+| `await subscribe(subscription)`     | Subscribe with `Subscription(id, channel, filters)`. Replayed on reconnect.|
+| `await unsubscribe(id)`             | Unsubscribe by subscription id.                             |
+| `on_channel(channel)`               | Decorator for a specific channel handler (incl. `mempool.` channels). |
+| `off_channel(channel, handler=None)`| Remove a channel handler (or all for that channel).         |
+| `on_any_channel()`                  | Decorator for a wildcard handler — every channel event.     |
+| `off_any_channel(handler=None)`     | Remove a wildcard handler (or all of them).                 |
+| `on_lifecycle(event)`               | Decorator for a lifecycle handler: `open`, `close`, `reconnect`, `error`. |
+| `off_lifecycle(event, handler=None)`| Remove a lifecycle handler (or all for that event).         |
+| `await close(code=1000, ...)`       | Graceful shutdown. Stops reconnect attempts.                |
+| `connected`                         | Property — whether the socket is currently open.            |
 
 ### Subscriptions & filters
 
@@ -119,8 +123,8 @@ await radion.realtime.subscribe(
     Subscription(id="whales", channel="large_trades", filters=ChannelFilters(min_usd=10_000))
 )
 
-# "event" fires for every channel; the event carries id + channel + data.
-@radion.realtime.on("event")
+# on_any_channel fires for every channel; the event carries id + channel + data.
+@radion.realtime.on_any_channel()
 async def on_any(event):
     print(event.id, event.channel, event.data)
 ```
@@ -146,19 +150,19 @@ for channel in CHANNELS:
 ### Lifecycle events
 
 ```python
-@radion.realtime.on("open")
+@radion.realtime.on_lifecycle("open")
 async def opened(_):
     print("connected")
 
-@radion.realtime.on("close")
+@radion.realtime.on_lifecycle("close")
 async def closed(info):
     print(info["code"], info["reason"])
 
-@radion.realtime.on("reconnect")
+@radion.realtime.on_lifecycle("reconnect")
 async def reconnecting(info):
     print(info["attempt"], info["delay"])
 
-@radion.realtime.on("error")
+@radion.realtime.on_lifecycle("error")
 async def errored(err):
     print(err)
 ```
@@ -180,7 +184,7 @@ and reconnected.
 ```python
 from radion import RadionConnectionError, RadionServerError
 
-@radion.realtime.on("error")
+@radion.realtime.on_lifecycle("error")
 async def errored(err):
     if isinstance(err, RadionServerError):
         print("server error", err.code, err.channel)
