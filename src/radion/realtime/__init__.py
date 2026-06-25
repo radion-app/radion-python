@@ -1,12 +1,11 @@
-"""Async WebSocket SDK for the Radion realtime API."""
+"""Radion realtime (WebSocket) product surface."""
 
 from __future__ import annotations
 
 from .channels import CHANNELS, Channel, is_channel
-from .client import RadionWS
+from .client import RealtimeClient
 from .dispatcher import EventDispatcher
-from .errors import RadionConnectionError, RadionError, RadionServerError
-from .protocol import ChannelEvent, ErrorFrame
+from .protocol import ChannelEvent, ChannelFilters, ErrorFrame, Subscription
 from .reconnect_manager import ReconnectManager
 from .subscription_manager import SubscriptionManager
 
@@ -14,15 +13,12 @@ __all__ = [
     "CHANNELS",
     "Channel",
     "ChannelEvent",
+    "ChannelFilters",
     "ErrorFrame",
     "EventDispatcher",
-    "RadionConnectionError",
-    "RadionError",
-    "RadionServerError",
-    "RadionWS",
+    "RealtimeClient",
     "ReconnectManager",
+    "Subscription",
     "SubscriptionManager",
     "is_channel",
 ]
-
-__version__ = "0.1.0"

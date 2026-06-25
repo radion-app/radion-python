@@ -1,11 +1,11 @@
 [project]
-name = "radion-ws"
+name = "radion"
 version = "0.1.0"
-description = "Async WebSocket SDK for the Radion realtime API"
+description = "Official async SDK for the Radion platform"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-keywords = ["radion", "websocket", "sdk", "realtime", "async"]
+keywords = ["radion", "sdk", "realtime", "websocket", "async", "polymarket"]
 dependencies = ["websockets>=13.0"]
 
 [project.optional-dependencies]
@@ -16,7 +16,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/radion_ws"]
+packages = ["src/radion"]
 
 [tool.ruff]
 line-length = 88

@@ -6,7 +6,6 @@ import inspect
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from .channels import Channel
 from .protocol import ChannelEvent
 
 ChannelHandler = Callable[[ChannelEvent], Awaitable[None] | None]
@@ -19,20 +18,24 @@ class EventDispatcher:
     """Routes channel events to channel handlers and lifecycle events to
     lifecycle handlers.
 
-    Handlers may be sync or async. Per the MVP constraints a throwing consumer
-    handler is reported through the ``error`` lifecycle event and never retried,
-    and never blocks delivery to other handlers.
+    Channel events are delivered to handlers registered for their ``channel``
+    name and to any registered for all events (the ``"event"`` wildcard).
+
+    Handlers may be sync or async. A throwing consumer handler is reported
+    through the ``error`` lifecycle event and never retried, and never blocks
+    delivery to other handlers.
     """
 
     def __init__(self) -> None:
-        self._channel_handlers: dict[Channel, list[ChannelHandler]] = {}
+        self._channel_handlers: dict[str, list[ChannelHandler]] = {}
+        self._all_handlers: list[ChannelHandler] = []
         self._client_handlers: dict[str, list[ClientHandler]] = {}
 
-    def on_channel(self, channel: Channel, handler: ChannelHandler) -> None:
+    def on_channel(self, channel: str, handler: ChannelHandler) -> None:
         self._channel_handlers.setdefault(channel, []).append(handler)
 
     def off_channel(
-        self, channel: Channel, handler: ChannelHandler | None = None
+        self, channel: str, handler: ChannelHandler | None = None
     ) -> None:
         if handler is None:
             self._channel_handlers.pop(channel, None)
@@ -40,6 +43,17 @@ class EventDispatcher:
         handlers = self._channel_handlers.get(channel)
         if handlers and handler in handlers:
             handlers.remove(handler)
+
+    def on_all(self, handler: ChannelHandler) -> None:
+        """Register a handler for every channel event, regardless of channel."""
+        self._all_handlers.append(handler)
+
+    def off_all(self, handler: ChannelHandler | None = None) -> None:
+        if handler is None:
+            self._all_handlers.clear()
+            return
+        if handler in self._all_handlers:
+            self._all_handlers.remove(handler)
 
     def on_client(self, event: str, handler: ClientHandler) -> None:
         self._client_handlers.setdefault(event, []).append(handler)
@@ -53,8 +67,10 @@ class EventDispatcher:
             handlers.remove(handler)
 
     async def dispatch(self, event: ChannelEvent) -> None:
-        """Deliver a channel event to every handler for its channel."""
+        """Deliver a channel event to its channel handlers and the wildcard."""
         for handler in list(self._channel_handlers.get(event.channel, [])):
+            await self._safely(handler, event)
+        for handler in list(self._all_handlers):
             await self._safely(handler, event)
 
     async def emit(self, event: str, payload: Any = None) -> None:

@@ -20,7 +20,9 @@ class RadionServerError(RadionError):
         *,
         code: str | None = None,
         channel: str | None = None,
+        id: str | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.channel = channel
+        self.id = id

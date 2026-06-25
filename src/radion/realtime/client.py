@@ -1,25 +1,25 @@
-"""The :class:`RadionWS` async WebSocket client."""
+"""The :class:`RealtimeClient` async WebSocket client."""
 
 from __future__ import annotations
 
 import asyncio
-import time
 from typing import TYPE_CHECKING, cast
 
 import websockets
 from websockets.asyncio.client import ClientConnection
 
-from .channels import Channel
+from .._config import DEFAULT_WS_URL
+from ..errors import RadionConnectionError, RadionServerError
 from .dispatcher import (
     CLIENT_EVENTS,
     ChannelHandler,
     ClientHandler,
     EventDispatcher,
 )
-from .errors import RadionConnectionError, RadionServerError
 from .heartbeat import Heartbeat
 from .protocol import (
     ChannelEvent,
+    Subscription,
     parse_inbound_frame,
     ping_frame,
     subscribe_frame,
@@ -31,32 +31,32 @@ from .subscription_manager import SubscriptionManager
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-DEFAULT_URL = "wss://api.radion.app/ws"
 
-
-class RadionWS:
+class RealtimeClient:
     """Lightweight async WebSocket client for the Radion realtime API.
 
     Owns the connection lifecycle, transparently reconnects with exponential
     backoff after unexpected drops, restores subscriptions on reconnect, and
     routes inbound channel frames to registered handlers.
 
+    Usually reached as ``radion.realtime``, but can be constructed standalone.
+
     Example::
 
-        client = RadionWS(api_key=os.getenv("RADION_API_KEY"))
+        client = RealtimeClient(api_key=os.getenv("RADION_API_KEY"))
         await client.connect()
-        await client.subscribe("trades")
+        await client.subscribe(Subscription(id="trades", channel="trades"))
 
         @client.on("trades")
         async def handle_trade(event):
-            print(event.data)
+            print(event.id, event.data)
     """
 
     def __init__(
         self,
         *,
         api_key: str,
-        url: str = DEFAULT_URL,
+        url: str = DEFAULT_WS_URL,
         reconnect: bool = True,
         heartbeat: bool = True,
         heartbeat_interval: float = 15.0,
@@ -98,17 +98,17 @@ class RadionWS:
         self._closed = False
         await self._open_socket(initial=True)
 
-    async def subscribe(self, channel: Channel) -> None:
+    async def subscribe(self, subscription: Subscription) -> None:
         """Subscribe to a channel. Replayed automatically after reconnect."""
         self._assert_usable()
-        if self._subscriptions.add(channel) and self.connected:
-            await self._send(subscribe_frame(channel))
+        if self._subscriptions.add(subscription) and self.connected:
+            await self._send(subscribe_frame(subscription))
 
-    async def unsubscribe(self, channel: Channel) -> None:
-        """Unsubscribe from a channel."""
+    async def unsubscribe(self, subscription_id: str) -> None:
+        """Unsubscribe by subscription id."""
         self._assert_usable()
-        if self._subscriptions.remove(channel) and self.connected:
-            await self._send(unsubscribe_frame(channel))
+        if self._subscriptions.remove(subscription_id) and self.connected:
+            await self._send(unsubscribe_frame(subscription_id))
 
     def on(
         self, event: str
@@ -120,6 +120,7 @@ class RadionWS:
             @client.on("trades")
             async def handle(event): ...
 
+        Use ``"event"`` to receive every channel event regardless of channel.
         Lifecycle events: ``open``, ``close``, ``reconnect``, ``error``.
         """
 
@@ -128,10 +129,10 @@ class RadionWS:
         ) -> ChannelHandler | ClientHandler:
             if event in CLIENT_EVENTS:
                 self._dispatcher.on_client(event, cast("ClientHandler", handler))
+            elif event == "event":
+                self._dispatcher.on_all(cast("ChannelHandler", handler))
             else:
-                self._dispatcher.on_channel(
-                    cast("Channel", event), cast("ChannelHandler", handler)
-                )
+                self._dispatcher.on_channel(event, cast("ChannelHandler", handler))
             return handler
 
         return register
@@ -142,10 +143,10 @@ class RadionWS:
         """Remove a handler (or all handlers for ``event``)."""
         if event in CLIENT_EVENTS:
             self._dispatcher.off_client(event, cast("ClientHandler", handler))
+        elif event == "event":
+            self._dispatcher.off_all(cast("ChannelHandler", handler))
         else:
-            self._dispatcher.off_channel(
-                cast("Channel", event), cast("ChannelHandler", handler)
-            )
+            self._dispatcher.off_channel(event, cast("ChannelHandler", handler))
 
     async def close(self, code: int = 1000, reason: str = "client shutdown") -> None:
         """Gracefully shut down. Stops reconnect attempts and closes the socket."""
@@ -178,8 +179,8 @@ class RadionWS:
         if self._reconnect is not None:
             self._reconnect.reset()
         # Restore every desired subscription after a (re)connect.
-        for channel in self._subscriptions.desired:
-            await self._send(subscribe_frame(channel))
+        for subscription in self._subscriptions.desired:
+            await self._send(subscribe_frame(subscription))
         if self._heartbeat is not None:
             self._heartbeat.start()
         await self._dispatcher.emit("open")
@@ -207,9 +208,9 @@ class RadionWS:
         if kind == "event":
             await self._dispatcher.dispatch(
                 ChannelEvent(
+                    id=frame["id"],
                     channel=frame["channel"],
                     data=frame.get("data"),
-                    event=frame.get("event"),
                 )
             )
         elif kind == "error":
@@ -219,6 +220,7 @@ class RadionWS:
                     frame.get("message", "server error"),
                     code=frame.get("code"),
                     channel=frame.get("channel"),
+                    id=frame.get("id"),
                 ),
             )
         # pong / subscribed / unsubscribed are acks; mark_alive already handled.
@@ -252,7 +254,7 @@ class RadionWS:
 
     async def _send_ping(self) -> None:
         if self.connected:
-            await self._send(ping_frame(time.time()))
+            await self._send(ping_frame())
 
     async def _send(self, payload: str) -> None:
         conn = self._conn

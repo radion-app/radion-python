@@ -1,24 +1,28 @@
-# radion-ws
+# radion
 
-[![PyPI version](https://img.shields.io/pypi/v/radion-ws.svg)](https://pypi.org/project/radion-ws/)
-[![Python versions](https://img.shields.io/pypi/pyversions/radion-ws.svg)](https://pypi.org/project/radion-ws/)
-[![license](https://img.shields.io/pypi/l/radion-ws.svg)](./LICENSE)
+[![PyPI version](https://img.shields.io/pypi/v/radion.svg)](https://pypi.org/project/radion/)
+[![Python versions](https://img.shields.io/pypi/pyversions/radion.svg)](https://pypi.org/project/radion/)
+[![license](https://img.shields.io/pypi/l/radion.svg)](./LICENSE)
 
-Async-first, fully-typed WebSocket SDK for the [Radion](https://radion.app) realtime API.
+Official, async-first, fully-typed SDK for the [Radion](https://radion.app) platform.
+
+One client, one API key, every Radion product surface. The realtime
+(WebSocket) API is available today under `radion.realtime`.
 
 ```python
-client = RadionWS(api_key=os.getenv("RADION_API_KEY"))
-await client.connect()
-await client.subscribe("trades")
+radion = Radion(api_key=os.getenv("RADION_API_KEY"))
+await radion.realtime.connect()
+await radion.realtime.subscribe(Subscription(id="trades", channel="trades"))
 
-@client.on("trades")
+@radion.realtime.on("trades")
 async def handle_trade(event):
-    print(event.data)
+    print(event.id, event.data)
 ```
 
 ## Features
 
-- **Connection lifecycle** — `connect()` / `subscribe()` / `unsubscribe()` / `close()`
+- **Unified client** — `Radion(api_key=...)` is the single entry point for every product surface
+- **Realtime today** — `radion.realtime` is the full WebSocket client
 - **Auto-reconnect** — exponential backoff with jitter; stops on graceful shutdown
 - **Subscription restore** — active channels are re-subscribed after every reconnect
 - **Heartbeats** — ping/pong keep-alive that detects stale connections and reconnects
@@ -32,8 +36,8 @@ async def handle_trade(event):
 ## Install
 
 ```bash
-uv add radion-ws
-# or: pip install radion-ws
+uv add radion
+# or: pip install radion
 ```
 
 ## Quick start
@@ -42,21 +46,21 @@ uv add radion-ws
 import asyncio
 import os
 
-from radion_ws import RadionWS
+from radion import Radion, Subscription
 
 
 async def main() -> None:
-    client = RadionWS(api_key=os.getenv("RADION_API_KEY"))
+    radion = Radion(api_key=os.getenv("RADION_API_KEY"))
 
-    await client.connect()
-    await client.subscribe("trades")
+    await radion.realtime.connect()
+    await radion.realtime.subscribe(Subscription(id="trades", channel="trades"))
 
-    @client.on("trades")
+    @radion.realtime.on("trades")
     async def handle_trade(event):
-        print(event.channel, event.data)
+        print(event.id, event.channel, event.data)
 
     await asyncio.sleep(60)
-    await client.close()
+    await radion.realtime.close()
 
 
 asyncio.run(main())
@@ -67,30 +71,63 @@ asyncio.run(main())
 ### Configuration
 
 ```python
-RadionWS(api_key, *, url=..., reconnect=True, heartbeat=True,
-         heartbeat_interval=15.0, heartbeat_timeout=10.0)
+Radion(api_key, *, base_url=..., ws_url=..., reconnect=True, heartbeat=True,
+       heartbeat_interval=15.0, heartbeat_timeout=10.0)
 ```
 
 | Argument             | Type    | Default                   | Description                                       |
 | -------------------- | ------- | ------------------------- | ------------------------------------------------- |
 | `api_key`            | `str`   | —                         | **Required.** Sent as the `X-API-Key` header.     |
-| `url`                | `str`   | `wss://api.radion.app/ws` | Override the endpoint.                            |
+| `base_url`           | `str`   | `https://api.radion.app`  | Base URL for the Radion API.                      |
+| `ws_url`             | `str`   | `wss://api.radion.app/ws` | Override the realtime endpoint.                   |
 | `reconnect`          | `bool`  | `True`                    | Auto-reconnect on unexpected disconnect.          |
 | `heartbeat`          | `bool`  | `True`                    | Enable heartbeats / stale detection.              |
 | `heartbeat_interval` | `float` | `15.0`                    | Seconds between pings.                            |
 | `heartbeat_timeout`  | `float` | `10.0`                    | Extra grace before a quiet connection is stale.   |
 
-### Methods
+Extra keyword arguments are forwarded to the realtime client.
+
+### Realtime client
+
+`radion.realtime` is a `RealtimeClient`. It can also be imported and
+constructed standalone:
+
+```python
+from radion import RealtimeClient
+
+client = RealtimeClient(api_key=os.getenv("RADION_API_KEY"))
+```
 
 | Method                          | Description                                                  |
 | ------------------------------- | ------------------------------------------------------------ |
 | `await connect()`               | Open the connection. Resolves once established.             |
-| `await subscribe(channel)`      | Subscribe to a channel. Replayed automatically on reconnect.|
-| `await unsubscribe(channel)`    | Unsubscribe from a channel.                                 |
-| `on(event)`                     | Decorator registering a channel or lifecycle handler.       |
+| `await subscribe(subscription)` | Subscribe with `Subscription(id, channel, filters)`. Replayed on reconnect.|
+| `await unsubscribe(id)`         | Unsubscribe by subscription id.                             |
+| `on(event)`                     | Decorator for a channel, `"event"` (all), or lifecycle handler. |
 | `off(event, handler=None)`      | Remove a handler (or all for that event).                   |
 | `await close(code=1000, ...)`   | Graceful shutdown. Stops reconnect attempts.                |
 | `connected`                     | Property — whether the socket is currently open.            |
+
+### Subscriptions & filters
+
+A subscription is `Subscription(id, channel, filters=None)`. The `id` is your
+own string, echoed back on every event so you can tell subscriptions apart;
+`channel` may carry a `mempool.` prefix. Some channels require a filter:
+
+```python
+from radion import ChannelFilters, Subscription
+
+await radion.realtime.subscribe(
+    Subscription(id="whales", channel="large_trades", filters=ChannelFilters(min_usd=10_000))
+)
+
+# "event" fires for every channel; the event carries id + channel + data.
+@radion.realtime.on("event")
+async def on_any(event):
+    print(event.id, event.channel, event.data)
+```
+
+`ChannelFilters`: `wallets`, `market_ids`, `token_ids`, `min_usd`.
 
 ### Channels
 
@@ -102,28 +139,28 @@ combos · prices · wallets · markets · large_trades
 Available as the `CHANNELS` tuple and the `Channel` type.
 
 ```python
-from radion_ws import CHANNELS
+from radion import CHANNELS, Subscription
 
 for channel in CHANNELS:
-    await client.subscribe(channel)
+    await radion.realtime.subscribe(Subscription(id=channel, channel=channel))
 ```
 
 ### Lifecycle events
 
 ```python
-@client.on("open")
+@radion.realtime.on("open")
 async def opened(_):
     print("connected")
 
-@client.on("close")
+@radion.realtime.on("close")
 async def closed(info):
     print(info["code"], info["reason"])
 
-@client.on("reconnect")
+@radion.realtime.on("reconnect")
 async def reconnecting(info):
     print(info["attempt"], info["delay"])
 
-@client.on("error")
+@radion.realtime.on("error")
 async def errored(err):
     print(err)
 ```
@@ -143,9 +180,9 @@ and reconnected.
 ### Error handling
 
 ```python
-from radion_ws import RadionConnectionError, RadionServerError
+from radion import RadionConnectionError, RadionServerError
 
-@client.on("error")
+@radion.realtime.on("error")
 async def errored(err):
     if isinstance(err, RadionServerError):
         print("server error", err.code, err.channel)
