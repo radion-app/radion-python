@@ -1,5 +1,5 @@
 [project]
-name = "radion"
+name = "radion-sdk"
 version = "0.2.0"
 description = "Official async SDK for the Radion platform"
 readme = "README.md"

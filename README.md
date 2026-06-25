@@ -1,13 +1,12 @@
-# radion
+# radion-sdk
 
-[![PyPI version](https://img.shields.io/pypi/v/radion.svg)](https://pypi.org/project/radion/)
-[![Python versions](https://img.shields.io/pypi/pyversions/radion.svg)](https://pypi.org/project/radion/)
-[![license](https://img.shields.io/pypi/l/radion.svg)](./LICENSE)
+[![PyPI version](https://img.shields.io/pypi/v/radion-sdk.svg)](https://pypi.org/project/radion-sdk/)
+[![Python versions](https://img.shields.io/pypi/pyversions/radion-sdk.svg)](https://pypi.org/project/radion-sdk/)
+[![license](https://img.shields.io/pypi/l/radion-sdk.svg)](./LICENSE)
 
 Official, async-first, fully-typed SDK for the [Radion](https://radion.app) platform.
 
-One client, one API key, every Radion product surface. The realtime
-(WebSocket) API is available today under `radion.realtime`.
+One client, one API key, every Radion product surface. Install `radion-sdk`; import it as `radion`.
 
 ```python
 radion = Radion(api_key=os.getenv("RADION_API_KEY"))
@@ -22,7 +21,6 @@ async def handle_trade(event):
 ## Features
 
 - **Unified client** — `Radion(api_key=...)` is the single entry point for every product surface
-- **Realtime today** — `radion.realtime` is the full WebSocket client
 - **Auto-reconnect** — exponential backoff with jitter; stops on graceful shutdown
 - **Subscription restore** — active channels are re-subscribed after every reconnect
 - **Heartbeats** — ping/pong keep-alive that detects stale connections and reconnects
@@ -36,8 +34,8 @@ async def handle_trade(event):
 ## Install
 
 ```bash
-uv add radion
-# or: pip install radion
+uv add radion-sdk
+# or: pip install radion-sdk
 ```
 
 ## Quick start

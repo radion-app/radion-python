@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, TypeVar, cast, overload
+from typing import TYPE_CHECKING, TypeVar, overload
 
 import websockets
 from websockets.asyncio.client import ClientConnection
@@ -11,7 +11,6 @@ from websockets.asyncio.client import ClientConnection
 from .._config import DEFAULT_WS_URL
 from ..errors import RadionConnectionError, RadionError, RadionServerError
 from .dispatcher import (
-    CLIENT_EVENTS,
     ChannelHandler,
     ClientHandler,
     EventDispatcher,
@@ -66,7 +65,7 @@ class RealtimeClient:
         await client.connect()
         await client.subscribe(Subscription(id="trades", channel="trades"))
 
-        @client.on("trades")
+        @client.on_channel("trades")
         async def handle_trade(event):
             print(event.id, event.data)
     """
@@ -133,98 +132,130 @@ class RealtimeClient:
             await self._send(unsubscribe_frame(subscription_id))
 
     @overload
-    def on(
-        self, event: Literal["trades", "large_trades"]
+    def on_channel(
+        self, channel: Literal["trades", "large_trades"]
     ) -> Callable[
         [ChannelHandlerFor[TradesPayload]], ChannelHandlerFor[TradesPayload]
     ]: ...
     @overload
-    def on(
-        self, event: Literal["oracle"]
+    def on_channel(
+        self, channel: Literal["oracle"]
     ) -> Callable[
         [ChannelHandlerFor[OraclePayload]], ChannelHandlerFor[OraclePayload]
     ]: ...
     @overload
-    def on(
-        self, event: Literal["lifecycle"]
+    def on_channel(
+        self, channel: Literal["lifecycle"]
     ) -> Callable[
         [ChannelHandlerFor[LifecyclePayload]], ChannelHandlerFor[LifecyclePayload]
     ]: ...
     @overload
-    def on(
-        self, event: Literal["activity"]
+    def on_channel(
+        self, channel: Literal["activity"]
     ) -> Callable[
         [ChannelHandlerFor[ActivityPayload]], ChannelHandlerFor[ActivityPayload]
     ]: ...
     @overload
-    def on(
-        self, event: Literal["collateral"]
+    def on_channel(
+        self, channel: Literal["collateral"]
     ) -> Callable[
         [ChannelHandlerFor[CollateralPayload]],
         ChannelHandlerFor[CollateralPayload],
     ]: ...
     @overload
-    def on(
-        self, event: Literal["combos"]
+    def on_channel(
+        self, channel: Literal["combos"]
     ) -> Callable[
         [ChannelHandlerFor[CombosPayload]], ChannelHandlerFor[CombosPayload]
     ]: ...
     @overload
-    def on(
-        self, event: Literal["prices"]
+    def on_channel(
+        self, channel: Literal["prices"]
     ) -> Callable[
         [ChannelHandlerFor[PricesPayload]], ChannelHandlerFor[PricesPayload]
     ]: ...
     @overload
-    def on(
-        self, event: Literal["global", "wallets", "markets"]
+    def on_channel(
+        self, channel: Literal["global", "wallets", "markets"]
     ) -> Callable[
         [ChannelHandlerFor[AnyConfirmedPayload]],
         ChannelHandlerFor[AnyConfirmedPayload],
     ]: ...
     @overload
-    def on(
-        self, event: str
-    ) -> Callable[[ChannelHandler | ClientHandler], ChannelHandler | ClientHandler]: ...
-    def on(
-        self, event: str
-    ) -> Callable[[ChannelHandler | ClientHandler], ChannelHandler | ClientHandler]:
-        """Register a handler for a channel or lifecycle event.
+    def on_channel(
+        self, channel: str
+    ) -> Callable[[ChannelHandler], ChannelHandler]: ...
+    def on_channel(
+        self, channel: str
+    ) -> Callable[[ChannelHandler], ChannelHandler]:
+        """Register a handler for events on a channel.
 
         Usable as a decorator::
 
-            @client.on("trades")
+            @client.on_channel("trades")
             async def handle(event): ...
 
-        Use ``"event"`` to receive every channel event regardless of channel.
-        Lifecycle events: ``open``, ``close``, ``reconnect``, ``error``.
-        Channel handlers receive ``event.data`` narrowed to the channel's
-        payload type.
+        Handlers receive ``event.data`` narrowed to the channel's payload type.
+        Also accepts ``mempool.``-prefixed channels by name.
         """
 
-        def register(
-            handler: ChannelHandler | ClientHandler,
-        ) -> ChannelHandler | ClientHandler:
-            if event in CLIENT_EVENTS:
-                self._dispatcher.on_client(event, cast("ClientHandler", handler))
-            elif event == "event":
-                self._dispatcher.on_all(cast("ChannelHandler", handler))
-            else:
-                self._dispatcher.on_channel(event, cast("ChannelHandler", handler))
+        def register(handler: ChannelHandler) -> ChannelHandler:
+            self._dispatcher.on_channel(channel, handler)
             return handler
 
         return register
 
-    def off(
-        self, event: str, handler: ChannelHandler | ClientHandler | None = None
+    def off_channel(
+        self, channel: str, handler: ChannelHandler | None = None
     ) -> None:
-        """Remove a handler (or all handlers for ``event``)."""
-        if event in CLIENT_EVENTS:
-            self._dispatcher.off_client(event, cast("ClientHandler", handler))
-        elif event == "event":
-            self._dispatcher.off_all(cast("ChannelHandler", handler))
-        else:
-            self._dispatcher.off_channel(event, cast("ChannelHandler", handler))
+        """Remove a channel handler (or all handlers for ``channel``)."""
+        self._dispatcher.off_channel(channel, handler)
+
+    def on_lifecycle(
+        self, event: Literal["open", "close", "reconnect", "error"]
+    ) -> Callable[[ClientHandler], ClientHandler]:
+        """Register a connection lifecycle handler.
+
+        Usable as a decorator::
+
+            @client.on_lifecycle("open")
+            async def handle(): ...
+
+        Lifecycle events: ``open``, ``close``, ``reconnect``, ``error``.
+        """
+
+        def register(handler: ClientHandler) -> ClientHandler:
+            self._dispatcher.on_client(event, handler)
+            return handler
+
+        return register
+
+    def off_lifecycle(
+        self,
+        event: Literal["open", "close", "reconnect", "error"],
+        handler: ClientHandler | None = None,
+    ) -> None:
+        """Remove a lifecycle handler (or all handlers for ``event``)."""
+        self._dispatcher.off_client(event, handler)
+
+    def on_any_channel(self) -> Callable[[ChannelHandler], ChannelHandler]:
+        """Register a handler for every channel event, regardless of channel.
+
+        Usable as a decorator::
+
+            @client.on_any_channel()
+            async def handle(event): ...
+        """
+
+        def register(handler: ChannelHandler) -> ChannelHandler:
+            self._dispatcher.on_all(handler)
+            return handler
+
+        return register
+
+    def off_any_channel(self, handler: ChannelHandler | None = None) -> None:
+        """Remove a wildcard handler (or all of them)."""
+        self._dispatcher.off_all(handler)
 
     async def close(self, code: int = 1000, reason: str = "client shutdown") -> None:
         """Gracefully shut down. Stops reconnect attempts and closes the socket."""

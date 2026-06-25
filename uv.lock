@@ -59,7 +59,7 @@ wheels = [
 ]
 
 [[package]]
-name = "radion"
+name = "radion-sdk"
 version = "0.2.0"
 source = { editable = "." }
 dependencies = [
