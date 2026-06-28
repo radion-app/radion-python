@@ -6,7 +6,12 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 keywords = ["radion", "sdk", "realtime", "websocket", "async", "polymarket"]
-dependencies = ["websockets>=13.0", "msgspec>=0.18.0"]
+dependencies = [
+    "websockets>=13.0",
+    "msgspec>=0.18.0",
+    "httpx>=0.27.0",
+    "attrs>=23.0.0",
+]
 
 [project.optional-dependencies]
 dev = ["ruff>=0.8.0", "ty>=0.0.1a1"]
@@ -22,9 +27,13 @@ packages = ["src/radion"]
 line-length = 88
 target-version = "py310"
 src = ["src"]
+extend-exclude = ["src/radion/rest"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC", "SIM", "RUF"]
 
 [tool.ty.environment]
 root = ["./src"]
+
+[tool.ty.src]
+exclude = ["src/radion/rest"]

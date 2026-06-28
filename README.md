@@ -85,6 +85,27 @@ Radion(api_key, *, base_url=..., ws_url=..., reconnect=True, heartbeat=True,
 
 Extra keyword arguments are forwarded to the realtime client.
 
+### REST client
+
+`radion.rest` is an authenticated REST client generated from the public OpenAPI
+schema. The endpoints live under `radion.rest.api`, grouped by resource
+(`markets`, `traders`, `events`, `search`, `order_book`, `health`,
+`authentication`). Every call uses the shared API key and base URL.
+
+```python
+from radion import Radion
+from radion.rest.api.markets import list_markets
+from radion.rest.api.traders import get_trader_pnl
+
+radion = Radion(api_key="...")
+
+markets = await list_markets.asyncio(client=radion.rest, limit=10)
+pnl = await get_trader_pnl.asyncio("0x...", client=radion.rest)
+```
+
+Each operation also has a synchronous `sync()` and `*_detailed()` variant. The
+payload is wrapped in a `data` field.
+
 ### Realtime client
 
 `radion.realtime` is a `RealtimeClient`. It can also be imported and

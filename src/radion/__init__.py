@@ -39,6 +39,7 @@ from .realtime import (
     is_subscribable_channel,
     validate_subscription_filters,
 )
+from .rest import AuthenticatedClient, Client
 
 __all__ = [
     "CHANNELS",
@@ -48,9 +49,11 @@ __all__ = [
     "ActivityPayload",
     "AnyChannelPayload",
     "AnyConfirmedPayload",
+    "AuthenticatedClient",
     "Channel",
     "ChannelEvent",
     "ChannelFilters",
+    "Client",
     "CollateralPayload",
     "CombosPayload",
     "ErrorFrame",

@@ -227,9 +227,7 @@ class RealtimeClient:
     @overload
     def on_channel(
         self,
-        channel: Literal[
-            "mempool.global", "mempool.wallets", "mempool.markets"
-        ],
+        channel: Literal["mempool.global", "mempool.wallets", "mempool.markets"],
     ) -> Callable[
         [ChannelHandlerFor[AnyConfirmedPayload]],
         ChannelHandlerFor[AnyConfirmedPayload],
@@ -238,9 +236,7 @@ class RealtimeClient:
     def on_channel(
         self, channel: str
     ) -> Callable[[ChannelHandler], ChannelHandler]: ...
-    def on_channel(
-        self, channel: str
-    ) -> Callable[[ChannelHandler], ChannelHandler]:
+    def on_channel(self, channel: str) -> Callable[[ChannelHandler], ChannelHandler]:
         """Register a handler for events on a channel.
 
         Usable as a decorator::
@@ -259,9 +255,7 @@ class RealtimeClient:
 
         return register
 
-    def off_channel(
-        self, channel: str, handler: ChannelHandler | None = None
-    ) -> None:
+    def off_channel(self, channel: str, handler: ChannelHandler | None = None) -> None:
         """Remove a channel handler (or all handlers for ``channel``)."""
         self._dispatcher.off_channel(channel, handler)
 
